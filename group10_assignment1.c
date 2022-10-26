@@ -4,11 +4,12 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <sys/shm.h>
-#include <limits.h>
 
-const int COUNT = 8;
+#define ITERATIONS 19
+#define COUNT 8
+
 int size;
-#define ITERATIONS 10000
+int iter;
 
 int movesX[] = {1,1,2,2,-1,-1,-2,-2};
 int movesY[] = {2,-2,1,-1,2,-2,1,-1};
@@ -33,6 +34,7 @@ int perm[19][4] = {
     {4, 3, 1, 2},
     {4, 3, 2, 1}
 };
+
 typedef struct {
     int x, y;
 } pair;
@@ -45,45 +47,29 @@ bool isValidNext(int board[], int x, int y)
 
 int getDegree(int board[], int x, int y)
 {
-    int count = 0;
+    int cnt = 0;
     for (int i = 0; i < COUNT; ++i)
-        if (isValidNext(board, (x + movesX[i]), (y + movesY[i]))) count++;
+        if (isValidNext(board, (x + movesX[i]), (y + movesY[i]))) cnt++;
  
-    return count;
+    return cnt;
 }
  
 
-bool next(int board[], int *x, int *y, int index)
+bool next(int board[], int *x, int *y)
 {
     int min_ind = -1, c, min_degree = (COUNT+1), nextX, nextY;
     int currX = *x, currY = *y;
 
-    if (index == -1) {
-        int start = rand()%COUNT;
-        for (int count = 0; count < COUNT; ++count)
+    for (int cnt = 0; cnt < COUNT; ++cnt)
+    {
+        int i = cnt >= 4 ? cnt : perm[iter][cnt] - 1;
+        nextX = currX + movesX[i];
+        nextY = currY + movesY[i];
+        if ((isValidNext(board, nextX, nextY)) &&
+        (c = getDegree(board, nextX, nextY)) < min_degree)
         {
-            int i = (start + count)%COUNT;
-            nextX = currX + movesX[i];
-            nextY = currY + movesY[i];
-            if ((isValidNext(board, nextX, nextY)) &&
-            (c = getDegree(board, nextX, nextY)) < min_degree)
-            {
-                min_ind = i;
-                min_degree = c;
-            }
-        }
-    } else {
-        for (int count = 0; count < COUNT; ++count)
-        {
-            int i = count >= 4 ? count : perm[index][count] - 1;
-            nextX = currX + movesX[i];
-            nextY = currY + movesY[i];
-            if ((isValidNext(board, nextX, nextY)) &&
-            (c = getDegree(board, nextX, nextY)) < min_degree)
-            {
-                min_ind = i;
-                min_degree = c;
-            }
+            min_ind = i;
+            min_degree = c;
         }
     }
  
@@ -113,7 +99,7 @@ void print(int board[], int n)
 
     for(int i = 1; i <= n * n; i++) printf("%d,%d|", order[i].x, order[i].y);
 }
-int index1;
+
 bool tourBoard(int start_x, int start_y)
 {
     
@@ -123,12 +109,8 @@ bool tourBoard(int start_x, int start_y)
     int x = start_x, y = start_y;
     board[y * size + x] = 1; 
  
-    if (index1 >= 19) {
-        for (int i = 0; i < size * size - 1; ++i)
-            if (next(board, &x, &y, -1) == 0) return false;
-    } else {
-        for (int i = 0; i < size * size - 1; ++i)
-            if (next(board, &x, &y, index1) == 0) return false;
+    for (int i = 0; i < size * size - 1; ++i) {
+        if (next(board, &x, &y) == 0) return false;
     }
     print(board, size);
 
@@ -148,19 +130,10 @@ int main(int argc, char *argv[])
         return 0;
     }
     
-    for (int iter = 0; iter < ITERATIONS; ++iter) {
-        index1 = iter;
-        if (iter < 19) {
-            if (tourBoard(startX, startY)) {
-                return 0;
-            }
-        } else {
-            srand(time(NULL) + iter);
-            if (tourBoard(startX, startY)) {
-                return 0;
-            }
-        }            
-        
+    for (iter = 0; iter < ITERATIONS; ++iter) {
+        if (tourBoard(startX, startY)) {
+            return 0;
+        }
     }
 
     printf("No Possible Tour");
