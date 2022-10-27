@@ -18,36 +18,51 @@ int* data,shmid;
  
 int movesX[] = {1,1,2,2,-1,-1,-2,-2};
 int movesY[] = {2,-2,1,-1,2,-2,1,-1};
-int perm[24][4] = {
-    {1, 2, 3, 4 },
-    {1, 2, 4, 3 },
-    {1, 3, 2, 4 },
-    {1, 3, 4, 2 },
-    {1, 4, 2, 3 },
-    {1, 4, 3, 2 },
-    {2, 1, 3, 4 },
-    {2, 1, 4, 3 },
-    {2, 3, 1, 4 },
-    {2, 3, 4, 1 },
-    {2, 4, 1, 3 },
-    {2, 4, 3, 1 },
-    {3, 1, 2, 4 },
-    {3, 1, 4, 2 },
-    {3, 2, 1, 4 },
-    {3, 2, 4, 1 },
-    {3, 4, 1, 2 },
-    {3, 4, 2, 1 },
-    {4, 1, 2, 3 },
-    {4, 1, 3, 2 },
-    {4, 2, 1, 3 },
-    {4, 2, 3, 1 },
-    {4, 3, 1, 2 },
-    {4, 3, 2, 1 }
-};
+int perm[24][4];
  
 typedef struct {
     int x, y;
 } pair;
+
+void swap(int *a,int *b)
+{
+    int temp = *b;
+    *b = *a;
+    *a = temp;
+}
+
+void generatePerms() {
+    int set[] = {1, 2, 3, 4};
+    int x = 4;
+
+    int* a = set;
+
+    // it calculates a factorial to stop the algorithm
+    
+    int fact = 24;
+
+    // Main part: here we permutate
+    int i, j;
+    int y = 0;
+    while (y <fact)
+    {
+        for (int c = 0; c < 4; c++) perm[y][c] = a[c];
+            
+        i = x - 2;
+        while (i>=0 && a[i] > a[i + 1])
+            i--;
+        j = x - 1;
+        while (a[j] < a[i])
+            j--;
+        swap(&a[i], &a[j]);
+        i++;
+        for (j = x - 1; j > i && i>=0; i++, j--)
+        {
+            swap(&a[i],&a[j]);
+        }
+        y++;
+    }
+}
  
 bool isValidNext(int board[], int x, int y)
 {
@@ -145,6 +160,8 @@ int main(int argc, char *argv[])
         printf("No Possible Tour");
         return 0;
     }
+
+    generatePerms();
  
     if(shmkey = ftok("/", 3) == -1)
     {
