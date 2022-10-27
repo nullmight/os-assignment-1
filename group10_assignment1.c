@@ -110,10 +110,10 @@ void tourBoard(int idx, int flg)
         exit(0);
     }
 
-    for (int i = 0; i < 4; ++i) {
-        printf("%d ", perm[i]);
-    }
-    printf("at idx=%d, pid=%d\n", idx, getpid());
+    // for (int i = 0; i < 4; ++i) {
+    //     printf("%d ", perm[i]);
+    // }
+    // printf("at idx=%d, pid=%d\n", idx, getpid());
 
     int board[ size * size ];
     memset(board, -1, sizeof(board));
