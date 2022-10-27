@@ -5,11 +5,13 @@
 #include <pthread.h>
 #include <sys/shm.h>
 #include <sys/wait.h>
- 
+#include <string.h>
+
 #define ITERATIONS 24
 #define COUNT 8
  
 int size;
+int start_x, start_y;
 int iter;
  
 pthread_mutex_t lock;
@@ -18,57 +20,16 @@ int* data,shmid;
  
 int movesX[] = {1,1,2,2,-1,-1,-2,-2};
 int movesY[] = {2,-2,1,-1,2,-2,1,-1};
-int perm[24][4];
+int perm[] = {0, 1, 2, 3};
  
 typedef struct {
     int x, y;
 } pair;
 
-void swap(int *a,int *b)
-{
-    int temp = *b;
-    *b = *a;
-    *a = temp;
-}
-
-void generatePerms() {
-    int set[] = {1, 2, 3, 4};
-    int x = 4;
-
-    int* a = set;
-
-    // it calculates a factorial to stop the algorithm
-    
-    int fact = 24;
-
-    // Main part: here we permutate
-    int i, j;
-    int y = 0;
-    while (y <fact)
-    {
-        for (int c = 0; c < 4; c++) perm[y][c] = a[c];
-            
-        i = x - 2;
-        while (i>=0 && a[i] > a[i + 1])
-            i--;
-        j = x - 1;
-        while (a[j] < a[i])
-            j--;
-        swap(&a[i], &a[j]);
-        i++;
-        for (j = x - 1; j > i && i>=0; i++, j--)
-        {
-            swap(&a[i],&a[j]);
-        }
-        y++;
-    }
-}
- 
 bool isValidNext(int board[], int x, int y)
 {
     return ((x >= 0 && y >= 0) && (x < size && y < size)) && (board[y*size+x] < 0);
 }
- 
  
 int getDegree(int board[], int x, int y)
 {
@@ -79,15 +40,14 @@ int getDegree(int board[], int x, int y)
     return cnt;
 }
  
- 
 bool next(int board[], int *x, int *y)
 {
     int min_ind = -1, c, min_degree = (COUNT+1), nextX, nextY;
     int currX = *x, currY = *y;
- 
-    for (int cnt = 0; cnt < COUNT; ++cnt)
+
+    for (int cnt = 0; *data == 0 && cnt < COUNT; ++cnt)
     {
-        int i = cnt >= 4 ? cnt : perm[iter][cnt] - 1;
+        int i = cnt >= 4 ? cnt : perm[cnt];
         nextX = currX + movesX[i];
         nextY = currY + movesY[i];
         if ((isValidNext(board, nextX, nextY)) &&
@@ -97,9 +57,10 @@ bool next(int board[], int *x, int *y)
             min_degree = c;
         }
     }
- 
-    if (min_ind == -1) return false;
- 
+
+    if (*data == 1 || min_ind == -1)
+        return false;
+
     nextX = currX + movesX[min_ind];
     nextY = currY + movesY[min_ind];
  
@@ -110,7 +71,7 @@ bool next(int board[], int *x, int *y)
  
     return true;
 }
- 
+
 void print(int board[], int n)
 {
     pair order[n * n + 1];
@@ -124,18 +85,37 @@ void print(int board[], int n)
  
     for(int i = 1; i <= n * n; i++) printf("%d,%d|", order[i].x, order[i].y);
 }
- 
-void tourBoard(int start_x, int start_y)
+
+int tmp;
+
+void tourBoard(int idx)
 {
- 
+    if (*data == 1)
+        exit(0);
+
+    for (int j = idx + 1; *data == 0 && j < 4; ++j) {
+        if (fork() == 0) {
+            tmp = perm[idx];
+            perm[idx] = perm[j];
+            perm[j] = tmp;
+            tourBoard(idx + 1);
+        }
+    }
+    
+    if (*data == 1)
+        exit(0);
+
     int board[ size * size ];
-    for (int i = 0; i < size*size; ++i) board[i] = -1;
- 
+    memset(board, -1, sizeof(board));
+
     int x = start_x, y = start_y;
     board[y * size + x] = 1; 
  
     for (int i = 0; i < size * size - 1; ++i) {
-        if (*data!=0 || next(board, &x, &y) == 0) exit(1);
+        if (*data == 1 || next(board, &x, &y) == 0) {
+            while (wait(NULL) > 0);
+            exit(0);
+        }
     }
     pthread_mutex_lock(&lock);
     if(*data == 0)
@@ -145,23 +125,20 @@ void tourBoard(int start_x, int start_y)
     }
     pthread_mutex_unlock(&lock);
 
-    exit(1);
+    exit(0);
 }
  
 // Driver code
 int main(int argc, char *argv[])
 {
- 
 	size = atoi(argv[1]);
-    int startX = atoi(argv[2]);
-    int startY = atoi(argv[3]);
+    start_x = atoi(argv[2]);
+    start_y = atoi(argv[3]);
  
-    if(size % 2 == 1 && (startX + startY) % 2 == 1) {
+    if(size % 2 == 1 && (start_x + start_y) % 2 == 1) {
         printf("No Possible Tour");
         return 0;
     }
-
-    generatePerms();
  
     if(shmkey = ftok("/", 3) == -1)
     {
@@ -180,28 +157,16 @@ int main(int argc, char *argv[])
         return 1;
     }
  
-    int main_pid = getpid();
- 
-    for(int i = 0;i<ITERATIONS;i++)
-    {
-        if(getpid() == main_pid)
-        {
-            if(fork()>0)
-                continue;
-        }
-        iter = i;
-        if(*data == 0)
-            tourBoard(startX,startY);
-        return 0;
+    if (fork() == 0) {
+        tourBoard(0);
     }
  
-    if(getpid() == main_pid)
-    {
-        while(wait(NULL)>0);
-        if(*data == 0)
+    while(wait(NULL)>0);
+    if (*data == 0) {
         printf("No Possible Tour");
-        pthread_mutex_destroy(&lock);
-        shmctl(shmid,IPC_RMID,NULL);
     }
+
+    pthread_mutex_destroy(&lock);
+    shmctl(shmid,IPC_RMID,NULL);
     return 0;
 }
