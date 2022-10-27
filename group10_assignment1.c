@@ -4,37 +4,47 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <sys/shm.h>
-
-#define ITERATIONS 19
+#include <sys/wait.h>
+ 
+#define ITERATIONS 24
 #define COUNT 8
-
+ 
 int size;
 int iter;
-
+ 
+pthread_mutex_t lock;
+key_t shmkey;
+int* data,shmid;
+ 
 int movesX[] = {1,1,2,2,-1,-1,-2,-2};
 int movesY[] = {2,-2,1,-1,2,-2,1,-1};
-int perm[19][4] = {
-    {1, 2, 3, 4},
-    {2, 1, 3, 4},
-    {3, 1, 2, 4},
-    {1, 3, 2, 4},
-    {2, 3, 1, 4},
-    {3, 2, 1, 4},
-    {4, 2, 1, 3},
-    {2, 4, 1, 3},
-    {1, 4, 2, 3},
-    {4, 1, 2, 3},
-    {2, 1, 4, 3},
-    {1, 2, 4, 3},
-    {1, 3, 4, 2},
-    {3, 1, 4, 2},
-    {4, 1, 3, 2},
-    {1, 4, 3, 2},
-    {3, 4, 1, 2},
-    {4, 3, 1, 2},
-    {4, 3, 2, 1}
+int perm[24][4] = {
+    {1, 2, 3, 4 },
+    {1, 2, 4, 3 },
+    {1, 3, 2, 4 },
+    {1, 3, 4, 2 },
+    {1, 4, 2, 3 },
+    {1, 4, 3, 2 },
+    {2, 1, 3, 4 },
+    {2, 1, 4, 3 },
+    {2, 3, 1, 4 },
+    {2, 3, 4, 1 },
+    {2, 4, 1, 3 },
+    {2, 4, 3, 1 },
+    {3, 1, 2, 4 },
+    {3, 1, 4, 2 },
+    {3, 2, 1, 4 },
+    {3, 2, 4, 1 },
+    {3, 4, 1, 2 },
+    {3, 4, 2, 1 },
+    {4, 1, 2, 3 },
+    {4, 1, 3, 2 },
+    {4, 2, 1, 3 },
+    {4, 2, 3, 1 },
+    {4, 3, 1, 2 },
+    {4, 3, 2, 1 }
 };
-
+ 
 typedef struct {
     int x, y;
 } pair;
@@ -44,7 +54,7 @@ bool isValidNext(int board[], int x, int y)
     return ((x >= 0 && y >= 0) && (x < size && y < size)) && (board[y*size+x] < 0);
 }
  
-
+ 
 int getDegree(int board[], int x, int y)
 {
     int cnt = 0;
@@ -54,12 +64,12 @@ int getDegree(int board[], int x, int y)
     return cnt;
 }
  
-
+ 
 bool next(int board[], int *x, int *y)
 {
     int min_ind = -1, c, min_degree = (COUNT+1), nextX, nextY;
     int currX = *x, currY = *y;
-
+ 
     for (int cnt = 0; cnt < COUNT; ++cnt)
     {
         int i = cnt >= 4 ? cnt : perm[iter][cnt] - 1;
@@ -85,7 +95,7 @@ bool next(int board[], int *x, int *y)
  
     return true;
 }
-
+ 
 void print(int board[], int n)
 {
     pair order[n * n + 1];
@@ -96,49 +106,85 @@ void print(int board[], int n)
             order[board[n * j + i]] = p;
         } 
     }
-
+ 
     for(int i = 1; i <= n * n; i++) printf("%d,%d|", order[i].x, order[i].y);
 }
-
+ 
 bool tourBoard(int start_x, int start_y)
 {
-    
+ 
     int board[ size * size ];
     for (int i = 0; i < size*size; ++i) board[i] = -1;
-
+ 
     int x = start_x, y = start_y;
     board[y * size + x] = 1; 
  
     for (int i = 0; i < size * size - 1; ++i) {
         if (next(board, &x, &y) == 0) return false;
     }
-    print(board, size);
-
+    pthread_mutex_lock(&lock);
+    if(*data == 0)
+    {
+        *data = 1;
+        print(board, size);
+    }
+    pthread_mutex_unlock(&lock);
+ 
     return true;
 }
  
 // Driver code
 int main(int argc, char *argv[])
 {
-
+ 
 	size = atoi(argv[1]);
     int startX = atoi(argv[2]);
     int startY = atoi(argv[3]);
-
+ 
     if(size % 2 == 1 && (startX + startY) % 2 == 1) {
         printf("No Possible Tour");
         return 0;
     }
-    
-    for (iter = 0; iter < ITERATIONS; ++iter) {
-        if (tourBoard(startX, startY)) {
-            return 0;
-        }
+ 
+    if(shmkey = ftok("/", 3) == -1)
+    {
+        perror("Key generation failed\n");
+        exit(1);
     }
-
-    printf("No Possible Tour");
-
+    if((shmid = shmget(shmkey, sizeof(int), 0666 | IPC_CREAT))== -1)
+    {
+        perror("Failed to get shmid\n");
+        exit(1);
+    }
+    data = (int *) shmat(shmid, NULL, 0x0);
+    *data = 0;
+    if (pthread_mutex_init(&lock, NULL) != 0) {
+        printf("\n mutex init has failed\n");
+        return 1;
+    }
+ 
+    int main_pid = getpid();
+ 
+    for(int i = 0;i<ITERATIONS;i++)
+    {
+        if(getpid() == main_pid)
+        {
+            if(fork()>0)
+                continue;
+        }
+        iter = i;
+        if(*data == 0)
+        tourBoard(startX,startY);
+        return 0;
+    }
+ 
+    if(getpid() == main_pid)
+    {
+        while(wait(NULL)>0);
+        if(*data == 0)
+        printf("No Possible Tour");
+        pthread_mutex_destroy(&lock);
+        shmctl(shmid,IPC_RMID,NULL);
+    }
     return 0;
 }
-
-
