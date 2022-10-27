@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <stdbool.h>
 #include <pthread.h>
 #include <sys/shm.h>
 #include <sys/wait.h>
+#include <stdbool.h>
 #include <string.h>
 
 #define ITERATIONS 24
@@ -88,7 +88,7 @@ void print(int board[], int n)
 
 int tmp;
 
-void tourBoard(int idx)
+void tourBoard(int idx, int flg)
 {
     if (*data == 1)
         exit(0);
@@ -98,12 +98,22 @@ void tourBoard(int idx)
             tmp = perm[idx];
             perm[idx] = perm[j];
             perm[j] = tmp;
-            tourBoard(idx + 1);
+            tourBoard(idx + 1, 1);
         }
     }
-    
-    if (*data == 1)
+
+    if (idx + 1 < 3 && *data == 0 && fork() == 0) {
+        tourBoard(idx + 1, 0);
+    }
+
+    if (*data == 1 || flg == 0) {
         exit(0);
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        printf("%d ", perm[i]);
+    }
+    printf("at idx=%d, pid=%d\n", idx, getpid());
 
     int board[ size * size ];
     memset(board, -1, sizeof(board));
@@ -158,7 +168,7 @@ int main(int argc, char *argv[])
     }
  
     if (fork() == 0) {
-        tourBoard(0);
+        tourBoard(0, 1);
     }
  
     while(wait(NULL)>0);
@@ -170,3 +180,30 @@ int main(int argc, char *argv[])
     shmctl(shmid,IPC_RMID,NULL);
     return 0;
 }
+
+/*
+0 1 2 3 at idx=0, pid=92236
+0 1 3 2 at idx=3, pid=92259
+0 2 1 3 at idx=2, pid=92248
+0 2 3 1 at idx=3, pid=92263
+0 3 1 2 at idx=3, pid=92258
+0 3 2 1 at idx=2, pid=92254
+1 0 2 3 at idx=1, pid=92237
+1 0 3 2 at idx=3, pid=92264
+1 2 0 3 at idx=2, pid=92240
+1 2 3 0 at idx=3, pid=92245
+1 3 0 2 at idx=3, pid=92250
+1 3 2 0 at idx=2, pid=92243
+2 0 1 3 at idx=2, pid=92242
+2 0 3 1 at idx=3, pid=92249
+2 1 0 3 at idx=1, pid=92238
+2 1 3 0 at idx=3, pid=92261
+2 3 0 1 at idx=2, pid=92246
+2 3 1 0 at idx=3, pid=92255
+3 0 1 2 at idx=3, pid=92262
+3 0 2 1 at idx=2, pid=92251
+3 1 0 2 at idx=3, pid=92260
+3 1 2 0 at idx=1, pid=92239
+3 2 1 0 at idx=2, pid=92244
+3 2 0 1 at idx=3, pid=92252
+*/
