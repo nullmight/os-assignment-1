@@ -125,7 +125,7 @@ void print(int board[], int n)
     for(int i = 1; i <= n * n; i++) printf("%d,%d|", order[i].x, order[i].y);
 }
  
-bool tourBoard(int start_x, int start_y)
+void tourBoard(int start_x, int start_y)
 {
  
     int board[ size * size ];
@@ -135,7 +135,7 @@ bool tourBoard(int start_x, int start_y)
     board[y * size + x] = 1; 
  
     for (int i = 0; i < size * size - 1; ++i) {
-        if (next(board, &x, &y) == 0) return false;
+        if (*data!=0 || next(board, &x, &y) == 0) exit(1);
     }
     pthread_mutex_lock(&lock);
     if(*data == 0)
@@ -144,8 +144,8 @@ bool tourBoard(int start_x, int start_y)
         print(board, size);
     }
     pthread_mutex_unlock(&lock);
- 
-    return true;
+
+    exit(1);
 }
  
 // Driver code
@@ -191,7 +191,7 @@ int main(int argc, char *argv[])
         }
         iter = i;
         if(*data == 0)
-        tourBoard(startX,startY);
+            tourBoard(startX,startY);
         return 0;
     }
  
