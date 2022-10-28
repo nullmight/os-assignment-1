@@ -16,11 +16,11 @@ int iter;
  
 pthread_mutex_t lock;
 key_t shmkey;
-int* data,shmid;
+int* found,shmid;
  
 int movesX[] = {1,1,2,2,-1,-1,-2,-2};
 int movesY[] = {2,-2,1,-1,2,-2,1,-1};
-int perm[] = {0, 1, 2, 3};
+int perm[] = {0, 1, 2, 3, 4, 5, 6, 7};
  
 typedef struct {
     int x, y;
@@ -45,9 +45,9 @@ bool next(int board[], int *x, int *y)
     int min_ind = -1, c, min_degree = (COUNT+1), nextX, nextY;
     int currX = *x, currY = *y;
 
-    for (int cnt = 0; *data == 0 && cnt < COUNT; ++cnt)
+    for (int cnt = 0; *found == 0 && cnt < COUNT; ++cnt)
     {
-        int i = cnt >= 4 ? cnt : perm[cnt];
+        int i = perm[cnt];
         nextX = currX + movesX[i];
         nextY = currY + movesY[i];
         if ((isValidNext(board, nextX, nextY)) &&
@@ -58,7 +58,7 @@ bool next(int board[], int *x, int *y)
         }
     }
 
-    if (*data == 1 || min_ind == -1)
+    if (*found == 1 || min_ind == -1)
         return false;
 
     nextX = currX + movesX[min_ind];
@@ -86,27 +86,27 @@ void print(int board[], int n)
     for(int i = 1; i <= n * n; i++) printf("%d,%d|", order[i].x, order[i].y);
 }
 
-int tmp;
+int maxp;
 
 void tourBoard(int idx, int flg)
 {
-    if (*data == 1)
+    if (*found == 1)
         exit(0);
 
-    for (int j = idx + 1; *data == 0 && j < 4; ++j) {
+    for (int j = idx + 1; *found == 0 && j < maxp; ++j) {
         if (fork() == 0) {
-            tmp = perm[idx];
+            int tmp = perm[idx];
             perm[idx] = perm[j];
             perm[j] = tmp;
             tourBoard(idx + 1, 1);
         }
     }
 
-    if (idx + 1 < 3 && *data == 0 && fork() == 0) {
+    if (idx + 2 < maxp && *found == 0 && fork() == 0) {
         tourBoard(idx + 1, 0);
     }
 
-    if (*data == 1 || flg == 0) {
+    if (*found == 1 || flg == 0) {
         exit(0);
     }
 
@@ -117,107 +117,34 @@ void tourBoard(int idx, int flg)
     board[y * size + x] = 1; 
  
     for (int i = 0; i < size * size - 1; ++i) {
-        if (*data == 1 || next(board, &x, &y) == 0) {
+        if (*found == 1 || next(board, &x, &y) == 0) {
             while (wait(NULL) > 0);
             exit(0);
         }
     }
     pthread_mutex_lock(&lock);
-    if(*data == 0)
+    if(*found == 0)
     {
-        *data = 1;
+        *found = 1;
         print(board, size);
     }
     pthread_mutex_unlock(&lock);
 
     exit(0);
 }
-
-bool nextEdge(int board[], int *x, int *y)
-{
-    int min_ind = -1, c, min_degree = (COUNT + 1), nextX, nextY;
-    int currX = *x, currY = *y;
-
-    for (int i = 0; *data == 0 && i < COUNT; ++i)
-    {
-        nextX = currX + movesX[i];
-        nextY = currY + movesY[i];
-        if ((isValidNext(board, nextX, nextY)) &&
-            (c = getDegree(board, nextX, nextY)) < min_degree)
-        {
-            min_ind = i;
-            min_degree = c;
-        }
-    }
-
-    if (*data == 1 || min_ind == -1)
-        return false;
-
-    nextX = currX + movesX[min_ind];
-    nextY = currY + movesY[min_ind];
-
-    for (int i = min_ind + 1; i < COUNT; ++i) {
-        int tnextX = currX + movesX[i];
-        int tnextY = currY + movesY[i];
-        if ((isValidNext(board, tnextX, tnextY)) &&
-            (c = getDegree(board, tnextX, tnextY)) == min_degree)
-        {
-            if (fork() == 0) {
-                nextX = tnextX;
-                nextY = tnextY;
-                break;
-            }
-        }
-    }
-
-    board[nextY * size + nextX] = board[currY * size + currX] + 1;
-
-    *x = nextX;
-    *y = nextY;
-
-    return true;
-}
-
-void tourBoardEdge()
-{
-    int board[size * size];
-    memset(board, -1, sizeof(board));
-
-    int x = start_x, y = start_y;
-    board[y * size + x] = 1;
-
-    for (int i = 0; i < size * size - 1; ++i)
-    {
-        if (*data == 1 || nextEdge(board, &x, &y) == 0)
-        {
-            while (wait(NULL) > 0);
-            exit(0);
-        }
-    }
-    
-    pthread_mutex_lock(&lock);
-    if (*data == 0)
-    {
-        *data = 1;
-        print(board, size);
-    }
-    pthread_mutex_unlock(&lock);
-
-    exit(0);
-}
-
 // Driver code
 int main(int argc, char *argv[])
 {
+
 	size = atoi(argv[1]);
     start_x = atoi(argv[2]);
     start_y = atoi(argv[3]);
- 
+    
     if(size % 2 == 1 && (start_x + start_y) % 2 == 1) {
         printf("No Possible Tour");
         return 0;
     }
-    
+
     if(shmkey = ftok("/", 3) == -1) {
         perror("Key generation failed\n");
         exit(1);
@@ -226,30 +153,31 @@ int main(int argc, char *argv[])
         perror("Failed to get shmid\n");
         exit(1);
     }
-    data = (int *) shmat(shmid, NULL, 0x0);
-    *data = 0;
+    found = (int *) shmat(shmid, NULL, 0x0);
+    *found = 0;
+
     if (pthread_mutex_init(&lock, NULL) != 0) {
         printf("\n mutex init has failed\n");
         return 1;
     }
- 
+
     if (size == 5) {
-        if (fork() == 0) {
-            tourBoardEdge();
-        }
+        maxp = 7;
     } else {
-        if (fork() == 0) {
-            tourBoard(0, 1);
-        }
+        maxp = 4;
     }
 
- 
-    while(wait(NULL)>0);
-    if (*data == 0) {
+    if (fork() == 0) {
+        tourBoard(0, 1);
+    }
+
+    while(wait(NULL) > 0);
+    if (*found == 0) {
         printf("No Possible Tour");
     }
 
     pthread_mutex_destroy(&lock);
     shmctl(shmid,IPC_RMID,NULL);
+
     return 0;
 }
