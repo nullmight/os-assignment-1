@@ -7,7 +7,6 @@
 #include <stdbool.h>
 #include <string.h>
 
-#define ITERATIONS 24
 #define COUNT 8
 
 // Input
@@ -134,8 +133,10 @@ int maxp;
  */
 void tourBoard(int idx, int flg) {
 
-    if (*found == 1)
+    if (*found == 1) {
+        while (wait(NULL) > 0);
         exit(0);
+    }
 
     // Generate permutations
     for (int j = idx + 1; *found == 0 && j < maxp; ++j) {
@@ -152,6 +153,7 @@ void tourBoard(int idx, int flg) {
     }
 
     if (*found == 1 || flg == 0) {
+        while (wait(NULL) > 0);
         exit(0);
     }
 
@@ -178,6 +180,7 @@ void tourBoard(int idx, int flg) {
     }
     pthread_mutex_unlock(&lock);
 
+    while (wait(NULL) > 0);
     exit(0);
 }
 
